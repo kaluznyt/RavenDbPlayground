@@ -32,7 +32,7 @@ namespace RavenDbPlayground
 												using(var session = ConnectAndReturnSession())
 												{
 																var address = new Address
-																{
+																{ 
 																				Street = "Somestreet rd",
 																				PostCode = "X13 AAA",
 																				City = "Some City"
