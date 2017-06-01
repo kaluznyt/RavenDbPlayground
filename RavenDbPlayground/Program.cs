@@ -1,35 +1,98 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Raven.Client;
-using Raven.Client.Document;
+using static System.Console;
 
 namespace RavenDbPlayground
 {
+    using System.Linq;
+
+    using Raven.Client;
+    using Raven.Client.Document;
+    using Raven.Client.Linq;
+
     public static class Program
     {
         private static void Main(string[] args)
         {
             //CreateEmployeeObjectsInRaven();
-            QueryEmployeeByFirstName();
+            //QueryEmployeeByFirstName();
+
+            //var session = DocumentStore.Value.OpenSession();
+
+            //Konsola.WriteLine(session.Load<Product>("products/1").Name);
+
+            PrintOrder(1);
+
         }
 
-        private static IDocumentSession ConnectAndReturnSession()
+        private static readonly Lazy<IDocumentStore> DocumentStore = new Lazy<IDocumentStore>(
+            () =>
+                {
+                    //var store = new DocumentStore { Url = "http://localhost:8080", DefaultDatabase = "Northwind" };
+                    var store = new DocumentStore { ConnectionStringName = "ravendb" };
+                    return store.Initialize();
+                });
+
+
+        private static void PrintOrder()
         {
-            return new DocumentStore
+            while(true)
             {
-                Url = "http://localhost:8081",
-                DefaultDatabase = "Northwind"
+                WriteLine("Please, enter an order # (0 to exit): ");
+
+                int orderNumber;
+                if(!int.TryParse(ReadLine(), out orderNumber))
+                {
+                    WriteLine("Order # is invalid.");
+                    continue;
+                }
+
+                if(orderNumber == 0)
+                    break;
+
+                PrintOrder(orderNumber);
             }
-            .Initialize()
-            .OpenSession();
+
+            WriteLine("Goodbye!");
+        }
+
+        private static void PrintOrder(int orderNumber)
+        {
+            using(var session = DocumentStore.Value.OpenSession())
+            {
+
+                var order = session.Include<Order>(o => o.Company)
+                    .Include(o => o.Employee)
+                    .Include(o => o.Lines.Select(l => l.Product))
+                    .Load(orderNumber);
+
+                if(order == null)
+                {
+                    WriteLine($"Order #{orderNumber} not found");
+                    return;
+                }
+
+                WriteLine($"Order #{orderNumber}");
+
+                var c = session.Load<Company>(order.Company);
+                WriteLine($"Company: {c.Id} - {c.Name}");
+
+                var e = session.Load<Employee>(order.Employee);
+                WriteLine($"Employee: {e.Id} - {e.LastName},{e.FirstName}");
+
+                foreach(var orderLine in order.Lines)
+                {
+
+                    var p = session.Load<Product>(orderLine.Product);
+                    WriteLine($" - {orderLine.ProductName}, {orderLine.Quantity} x {p.QuantityPerUnit}");
+                }
+
+
+            }
         }
 
         private static void QueryEmployeeByFirstName()
         {
-            using(var session = ConnectAndReturnSession())
+            using(var session = DocumentStore.Value.OpenSession())
             {
                 var address = new Address
                 {
@@ -59,7 +122,7 @@ namespace RavenDbPlayground
 
         private static void CreateEmployeeObjectsInRaven()
         {
-            using(var session = ConnectAndReturnSession())
+            using(var session = DocumentStore.Value.OpenSession())
             {
                 for(var i = 0; i < 90000; i++)
                 {
